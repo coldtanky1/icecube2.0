@@ -18,6 +18,7 @@ bot = commands.Bot(command_prefix="$", intents=intents, case_insensitive=True)
 # you can only view infra, not make it
 # you can't view info about infra
 # there aren't emojis for infra because i am too lazy (deal with it)
+# there is no help menu pls make it
 # good luck making most of that stuff rev (hehe)
 
 # Connect to the sqlite DB (it will create a new DB if it doesnt exit)
