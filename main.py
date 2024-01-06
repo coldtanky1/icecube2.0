@@ -2,10 +2,14 @@ import sqlite3
 import asyncio
 import discord
 from discord.ext import commands
+from discord.utils import get
 
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix="$", intents=intents, case_insensitive=True)
 
+new_line = '\n'
+bot.remove_command('help')
+debug = False
 # MUST READ NOTES:
 # nation_score, gdp and population have no logic behind them, meaning it's worthless for now
 # there is no way to recruit troops
@@ -17,11 +21,39 @@ bot = commands.Bot(command_prefix="$", intents=intents, case_insensitive=True)
 # you can't make artillery
 # you can only view infra, not make it
 # you can't view info about infra
-# there aren't emojis for infra because i am too lazy (deal with it)
-# there is no help menu pls make it
+# there aren't emojis for infra because I am too lazy (deal with it)
 # good luck making most of that stuff rev (hehe)
 
-# Connect to the sqlite DB (it will create a new DB if it doesnt exit)
+
+# Basic Error Handler - Just add a new elif if you want to add another error to the list
+# If you get the "Unspecified error" error, and you want to check what the issue is through the terminal, either remove
+@bot.event
+async def on_command_error(ctx, error):
+    global debug
+    if debug is False:   # Checks if bot is in debug mode
+        if hasattr(ctx.command, 'on_error'):
+            return
+        error = getattr(error, 'original', error)
+        if isinstance(error, commands.CommandNotFound, ):
+            embed = discord.Embed(colour=0xEF2F73, title="Error", type='rich',
+                                  description="Command not found.")
+            embed.set_footer(text="Check the help command")
+            await ctx.send(embed=embed)
+        else:
+            embed = discord.Embed(colour=0xEF2F73, title="Error", type='rich',
+                                  description="An unspecified error has occurred.")
+            embed.set_footer(text="Ping a dev so they can look into it")
+            await ctx.send(embed=embed)
+    else:
+        print(error)
+
+
+def dev_check(usid):
+    return usid == 837257162223910912 or usid == 669517694751604738
+
+
+# Connect to the sqlite DB (it will create a new DB if it doesn't exit)
+
 conn = sqlite3.connect('player_info.db')
 cursor = conn.cursor()
 
@@ -46,7 +78,7 @@ cursor.execute('''
         name_nation TEXT PRIMARY KEY,
         troops INTEGER,
         planes INTEGER,
-        weapon TEXT,
+        weapon INTEGER,
         tanks INTEGER,
         artillery INTEGER,
         anti_air INTEGER,
@@ -78,14 +110,78 @@ cursor.execute('''
     ''')
 
 
-
 @bot.event
 async def on_ready():
     print(f"Logged in as {bot.user.name}")
 
 
 @bot.command()
-async def create(ctx, nation_name: str):
+async def ping(ctx):
+    lat = int(bot.latency * 1000)
+    await ctx.send(f'Pong! {lat}ms')
+
+
+@bot.command()   # Debug mode status
+async def debug_status(ctx):
+    if dev_check(ctx.author.id):
+        global debug
+        await ctx.send(f'Debug Status: {debug}')
+    else:
+        print(f'{ctx.author} attempted to enable debug')
+        await ctx.send(f'Permission denied: You are not a developer.')
+
+
+@bot.command()   # Debug mode switcher
+async def debug_mode(ctx):
+    if dev_check(ctx.author.id):
+        global debug
+        if debug:
+            debug = False
+            await ctx.send(f'Debug mode: OFF')
+            print("Debug disabled")
+        else:
+            debug = True
+            await ctx.send(f'Debug mode: ON')
+            print("Debug enabled")
+    else:
+        print(f'{ctx.author} attempted to enable debug')
+        await ctx.send(f'Permission denied: You are not a developer.')
+
+
+# Private Channel Command
+@bot.command()
+async def private(ctx):
+    chname = ctx.author.name
+
+    def kat_chan_id(context, ch_name):  # Finds and gets id of channel
+        for channel in context.guild.channels:
+            if channel.name == ch_name:
+                return channel.id
+
+    if any(chname in channel.name for channel in ctx.guild.channels):  # Checks if channel already exists
+        chid = kat_chan_id(ctx, chname)
+        embed = discord.Embed(colour=0x8212DF, title="Instance Already Running", type='rich',
+                              description=f'Cannot start another instance because an instance for you already exists in <#{str(chid)}>')
+        await ctx.send(embed=embed)
+    else:  # Creates Private Channel
+        topic = chname + '\'s Project Thaw private channel'
+        category = bot.get_channel()  # Private channel category DON'T FORGET TO INSERT THE ID OF THE CATEGORY YOU WANT THE PRIVATE CHANNELS TO BE IN
+        overwrites = {
+            discord.utils.get(ctx.guild.roles, name="Overseer"): discord.PermissionOverwrite(read_messages=True),
+            # Overseer / Game Master Role
+            ctx.message.guild.default_role: discord.PermissionOverwrite(read_messages=False),
+            ctx.author: discord.PermissionOverwrite(read_messages=True)
+        }
+        await ctx.guild.create_text_channel(name=chname, category=category, overwrites=overwrites, topic=topic)
+        channel = get(ctx.guild.channels, name=chname)  # Gets channel
+        msg = await channel.send(f'<@{ctx.author.id}>')
+        await msg.delete()
+        await asyncio.sleep(3600)  # Time before channel gets deleted
+        await channel.delete()
+
+
+@bot.command()
+async def create(ctx):
     user_id = ctx.author.id
 
     # Check if the user already has an account
@@ -93,52 +189,84 @@ async def create(ctx, nation_name: str):
     existing_record = cursor.fetchone()
 
     if existing_record:
-        await ctx.send("You have already created a nation.")
+        embed = discord.Embed(colour=0xEF2F73, title="Error", type='rich',
+                              description=f'You already created a nation.')
+        embed.set_footer(text="Dementia")
+        await ctx.send(embed=embed)
         return
 
-    if len(nation_name) > 25:
-        await ctx.send("You cannot have more than 25 characters.")
+    embed = discord.Embed(colour=0xFFF86E, title="Creating Nation", type='rich',
+                          description="What is the name of your nation?"
+                                      "Name cannot be longer than 25 characters.")
+    emb = await ctx.send(embed=embed)
+
+    # Checks if response is made by the same user and in the same channel
+    def msgchk(msg):
+        return msg.author == ctx.author and msg.channel == ctx.channel
+
+    try:
+        nt_name = await bot.wait_for('message', check=msgchk, timeout=30.0)
+    except asyncio.TimeoutError:
+        return await ctx.send("You took too long to respond.")
+    nat_name = nt_name.content
+
+    if len(nat_name) > 25:
+        embed = discord.Embed(colour=0xEF2F73, title="Error", type='rich',
+                              description=f'Your nation name cannot be longer than 25 characters.')
+        await emb.edit(embed=embed)
         return
 
-    embed=discord.Embed(
-        title='Nation Creation',
-        description=f'This is the glorious start of **{nation_name}**! We wish you a successful journey in leading your people to greatness.',
-        color=discord.Color.blurple()
-        )
-    await ctx.send(embed=embed)
+    embed = discord.Embed(
+        title='Nation Successfully Created',
+        description=f'This is the glorious start of the **{nat_name}**! '
+                    f'{new_line}We wish you a successful journey in leading your people to greatness.',
+        color=0x5BF9A0
+    )
+    await emb.edit(embed=embed)
 
     # insert data into the table
-    cursor.execute('INSERT INTO user_info (user_id, nation_name) VALUES (?, ?)', (user_id, nation_name))
+    cursor.execute('INSERT INTO user_info (user_id, nation_name) VALUES (?, ?)', (user_id, nat_name))
     conn.commit()
 
-    print(f"successfully added {user_id}({nation_name})")
-    
+    print(f"Successfully added {user_id}({nat_name})")
+
     # add base stats to the user
     cursor.execute('INSERT INTO user_stats (name, nation_score, gdp, population) VALUES (?, ?, ?, ?)',
-        (nation_name, 0,0,100000))
+                   (nat_name, 0, 0, 100000))
     conn.commit()
 
     # add base mil stats to the user
-    cursor.execute('INSERT INTO user_mil (name_nation, troops, planes, weapon, tanks, artillery, anti_air, barracks) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-        (nation_name,0,0,'none',0,0,0,0))
+    cursor.execute(
+        'INSERT INTO user_mil (name_nation, troops, planes, weapon, tanks, artillery, anti_air, barracks) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        (nat_name, 0, 0, 0, 0, 0, 0, 0))
     conn.commit()
 
-    print(f"successfully add stats to {user_id}({nation_name})")
+    print(f"Successfully added stats to {user_id}({nat_name})")
 
-    #add base infra infra to the user
-    cursor.execute('INSERT INTO infra (name, basic_house, small_flat, apt_complex, skyscraper, lumber_mill, coal_mine, iron_mine, lead_mine, bauxite_mine, oil_derrick, uranium_mine, farm, aluminium_factory, steel_factory, oil_refinery, ammo_factory, concrete_factory) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-        (nation_name,12500,1000,834,0,10,100,10,10,10,10,0,2500,0,0,0,0,0)) # the values came from ice cube's game sheet so just use that as a reference
+    # Add base infra stats to the user
+    cursor.execute(
+        'INSERT INTO infra (name, basic_house, small_flat, apt_complex, skyscraper, lumber_mill, coal_mine, iron_mine, lead_mine, bauxite_mine, oil_derrick, uranium_mine, farm, aluminium_factory, steel_factory, oil_refinery, ammo_factory, concrete_factory) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+        (nat_name, 12500, 1000, 834, 0, 10, 100, 10, 10, 10, 10, 0, 2500, 0, 0, 0, 0,
+         0))  # the values came from ice cube's game sheet so just use that as a reference
     conn.commit()
 
-    print(f"successfully add infra to {user_id}({nation_name})")
+    print(f"Successfully added infra to {user_id}({nat_name})")
 
 
 @bot.command()
 async def rename(ctx, new_name: str):
+    if new_name == "":
+        embed = discord.Embed(colour=0xEF2F73, title="Error", type='rich',
+                              description=f'You forgot to write the new name.{new_line}{new_line}'
+                                          f'Command Format: `$rename [new_name]`')
+        await ctx.send(embed=embed)
+
     user_id = ctx.author.id
 
     if len(new_name) > 25:
-        await ctx.send("You cannot have more than 25 characters.")
+        embed = discord.Embed(colour=0xEF2F73, title="Error", type='rich',
+                              description=f'Your nation name cannot be longer than 25 characters.')
+        await ctx.send(embed=embed)
         return
 
     cursor.execute('SELECT nation_name FROM user_info WHERE user_id = ?', (user_id,))
@@ -157,20 +285,24 @@ async def rename(ctx, new_name: str):
         cursor.execute('UPDATE user_stats SET name = ? WHERE name = ?', (new_name, nation_name))
         conn.commit()
         # updates the user_mil table
-        cursor.execute('UPDATE user_mil SET name_nation = ? WHERE name_nation = ?', (new_name, nation_name)) 
+        cursor.execute('UPDATE user_mil SET name_nation = ? WHERE name_nation = ?', (new_name, nation_name))
         conn.commit()
         # updates the infra table
-        cursor.execute('UPDATE infra SET name = ? WHERE name = ?', (new_name, nation_name)) 
+        cursor.execute('UPDATE infra SET name = ? WHERE name = ?', (new_name, nation_name))
         conn.commit()
 
-        embed=discord.Embed(
+        embed = discord.Embed(
             title='Nation Rename',
-            description=f'You have successfully changed your name to **{new_name}**!',
-            color=discord.Color.blurple()
-            )
+            description=f'You have successfully changed your nation\'s name to **{new_name}**!',
+            color=0x5BF9A0
+        )
         await ctx.send(embed=embed)
     else:
-        await ctx.send("You do not have a nation, use`$create` to create one.")
+        embed = discord.Embed(colour=0xEF2F73, title="Error", type='rich',
+                              description=f'You do not have a nation.{new_line}'
+                                          f'To create one, type `$create`.')
+        await ctx.send(embed=embed)
+
 
 @bot.command()
 async def stats(ctx):
@@ -190,23 +322,28 @@ async def stats(ctx):
         if stats_result:
             name, nation_score, gdp, population = stats_result
 
-            embed=discord.Embed(
+            embed = discord.Embed(
                 title=f"📊 {name}'s Stats",
                 description=f'Name: {name}',
-                color=discord.Color.blue()
-                )
+                color=0x04a5e5
+            )
             embed.add_field(name='🫅 Ruler', value=f"<@{user_id}>", inline=False)
-            embed.add_field(name='', value='',inline=False)
+            embed.add_field(name='', value='', inline=False)
             embed.add_field(name='🏆 Nation Score', value=f'{nation_score}', inline=False)
-            embed.add_field(name='', value='',inline=False)
-            embed.add_field(name='📈 Gross Domestic Product', value=f'{gdp}',inline=False)
-            embed.add_field(name='', value='',inline=False)
-            embed.add_field(name='👪 Population', value=f'{population}',inline=False)
+            embed.add_field(name='', value='', inline=False)
+            embed.add_field(name='📈 Gross Domestic Product', value=f'{gdp}', inline=False)
+            embed.add_field(name='', value='', inline=False)
+            embed.add_field(name='👪 Population', value=f'{population}', inline=False)
             await ctx.send(embed=embed)
         else:
-            await ctx.send("No stats found.")
+            embed = discord.Embed(colour=0xEF2F73, title="Error", type='rich',
+                                  description=f'Cannot find stats.')
+            await ctx.send(embed=embed)
     else:
-        await ctx.send("You do not have a nation, use `$create` to create one.")
+        embed = discord.Embed(colour=0xEF2F73, title="Error", type='rich',
+                              description=f'You do not have a nation.{new_line}'
+                                          f'To create one, type `$create`.')
+        await ctx.send(embed=embed)
 
 
 @bot.command()
@@ -221,35 +358,42 @@ async def mstats(ctx):
         nation_name = result[0]
 
         # fetch user's mil stats
-        cursor.execute('SELECT name_nation, troops, planes, weapon, tanks, artillery, anti_air, barracks FROM user_mil WHERE name_nation = ?', (nation_name,))
+        cursor.execute(
+            'SELECT name_nation, troops, planes, weapon, tanks, artillery, anti_air, barracks FROM user_mil WHERE name_nation = ?',
+            (nation_name,))
         mil_result = cursor.fetchone()
 
         if mil_result:
             name_nation, troops, planes, weapon, tanks, artillery, anti_air, barracks = mil_result
 
-            embed=discord.Embed(
+            embed = discord.Embed(
                 title=f"⚔ {name_nation}'s Military Stats",
                 description='',
-                color=discord.Color.red()
-                )
+                color=0xe64553
+            )
             embed.add_field(name='🪖 Troops', value=f'{troops}', inline=False)
-            embed.add_field(name='', value='',inline=False)
-            embed.add_field(name='⛟ Tanks', value=f'{tanks}',inline=False)
-            embed.add_field(name='', value='',inline=False)
-            embed.add_field(name='💥 Artillery', value=f'{artillery}',inline=False)
-            embed.add_field(name='', value='',inline=False)
-            embed.add_field(name='💥 Anti-Air', value=f'{anti_air}',inline=False)
-            embed.add_field(name='', value='',inline=False)
-            embed.add_field(name='🛫 Planes', value=f'{planes}',inline=False)
-            embed.add_field(name='', value='',inline=False)
-            embed.add_field(name='🎖 Barracks', value=f'{barracks}',inline=False)
-            embed.add_field(name='', value='',inline=False)
-            embed.add_field(name='🔫 Weapon', value=f'{weapon}',inline=False)
+            embed.add_field(name='', value='', inline=False)
+            embed.add_field(name='⛟ Tanks', value=f'{tanks}', inline=False)
+            embed.add_field(name='', value='', inline=False)
+            embed.add_field(name='💥 Artillery', value=f'{artillery}', inline=False)
+            embed.add_field(name='', value='', inline=False)
+            embed.add_field(name='💥 Anti-Air', value=f'{anti_air}', inline=False)
+            embed.add_field(name='', value='', inline=False)
+            embed.add_field(name='🛫 Planes', value=f'{planes}', inline=False)
+            embed.add_field(name='', value='', inline=False)
+            embed.add_field(name='🎖 Barracks', value=f'{barracks}', inline=False)
+            embed.add_field(name='', value='', inline=False)
+            embed.add_field(name='🔫 Weapon', value=f'{weapon}', inline=False)
             await ctx.send(embed=embed)
         else:
-            await ctx.send("No military stats found.")
+            embed = discord.Embed(colour=0xEF2F73, title="Error", type='rich',
+                                  description=f'Cannot find stats.')
+            await ctx.send(embed=embed)
     else:
-        await ctx.send("You do not have a nation, use `$create` to create one.")
+        embed = discord.Embed(colour=0xEF2F73, title="Error", type='rich',
+                              description=f'You do not have a nation.{new_line}'
+                                          f'To create one, type `$create`.')
+        await ctx.send(embed=embed)
 
 
 @bot.command()
@@ -264,7 +408,9 @@ async def infra(ctx):
         nation_name = result[0]
 
         # fetch user's infra
-        cursor.execute('SELECT name, basic_house, small_flat, apt_complex, skyscraper, lumber_mill, coal_mine, iron_mine, lead_mine, bauxite_mine, oil_derrick, uranium_mine, farm, aluminium_factory, steel_factory, oil_refinery, ammo_factory, concrete_factory FROM infra WHERE name = ?', (nation_name,))
+        cursor.execute(
+            'SELECT name, basic_house, small_flat, apt_complex, skyscraper, lumber_mill, coal_mine, iron_mine, lead_mine, bauxite_mine, oil_derrick, uranium_mine, farm, aluminium_factory, steel_factory, oil_refinery, ammo_factory, concrete_factory FROM infra WHERE name = ?',
+            (nation_name,))
         infra_result = cursor.fetchone()
 
         if infra_result:
@@ -310,13 +456,13 @@ async def infra(ctx):
                 ("Concrete Factory", str(concrete_factory)),
             ]
 
-            # paginate (if thats a word) the fields
+            # paginate (if that's a word) the fields
             pages = []
             current_page = 0
             fields_per_page = 10
 
             while current_page < len(fields):
-                embed = discord.Embed(title=f"{name}'s Infrastructure", color=discord.Color.blurple())
+                embed = discord.Embed(title=f"{name}'s Infrastructure", color=0x8839ef)
 
                 for field_name, field_value in fields[current_page:current_page + fields_per_page]:
                     embed.add_field(name=field_name, value=field_value, inline=False)
@@ -329,8 +475,8 @@ async def infra(ctx):
             await message.add_reaction('⬅️')
             await message.add_reaction('➡️')
 
-            def check(reaction, user):
-                return user == ctx.author and str(reaction.emoji) in ['⬅️', '➡️']
+            def check(react, usr):
+                return usr == ctx.author and str(react.emoji) in ['⬅️', '➡️']
 
             current_page = 0
 
@@ -348,10 +494,182 @@ async def infra(ctx):
                 await message.edit(embed=pages[current_page])
                 await message.remove_reaction(reaction.emoji, user)
         else:
-            await ctx.send("No infra stats found.")
+            embed = discord.Embed(colour=0xEF2F73, title="Error", type='rich',
+                                  description=f'Cannot find stats.')
+            await ctx.send(embed=embed)
     else:
-        await ctx.send("You do not have a nation, use `$create` to create one.")
+        embed = discord.Embed(colour=0xEF2F73, title="Error", type='rich',
+                              description=f'You do not have a nation.{new_line}'
+                                          f'To create one, type `$create`.')
+        await ctx.send(embed=embed)
 
 
+# Help Command
+@bot.command()
+async def help(ctx, cmd: str = ""):
+    cmd = cmd.lower()
 
-bot.run('TOKEN_HERE')
+    match cmd:   # Description and syntax of each command
+        case "create":
+            embed = discord.Embed(colour=0xdd7878, title="Help: Create", type='rich',
+                                  description=f'Syntax: `$create`{new_line}{new_line}'
+                                              f'Creates a new nation if you don\'t have one already')
+            await ctx.send(embed=embed)
+        case "private":
+            embed = discord.Embed(colour=0xdd7878, title="Help: Private", type='rich',
+                                  description=f'Syntax: `$private`{new_line}{new_line}'
+                                              f'Creates a private channel that will be deleted after 1 hour.')
+            await ctx.send(embed=embed)
+        case "infra":
+            embed = discord.Embed(colour=0xdd7878, title="Help: Infra", type='rich',
+                                  description=f'Syntax: `$infra`{new_line}{new_line}'
+                                              f'Displays your infrastructure.')
+            await ctx.send(embed=embed)
+        case "mstats":
+            embed = discord.Embed(colour=0xdd7878, title="Help: Mstats", type='rich',
+                                  description=f'Syntax: `$mstats`{new_line}{new_line}'
+                                              f'Displays your military statistics.')
+            await ctx.send(embed=embed)
+        case "rename":
+            embed = discord.Embed(colour=0xdd7878, title="Help: Rename", type='rich',
+                                  description=f'Syntax: `$rename [new name]`{new_line}{new_line}'
+                                              f'Changes the name of your nation to the [new name].{new_line}'
+                                              f'Mind that the name cannot be longer than 25 characters.')
+            await ctx.send(embed=embed)
+
+        case "stats":
+            embed = discord.Embed(colour=0xdd7878, title="Help: Stats", type='rich',
+                                  description=f'Syntax: `$stats`{new_line}{new_line}'
+                                              f'Displays your nation\'s statistics.')
+            await ctx.send(embed=embed)
+
+        case _:   # Actual command list
+            generating = discord.Embed(colour=0xdce0e8, title="Help", type='rich',
+                                       description="Generating help pages...")
+
+            gen_emb = discord.Embed(colour=0xea76cb, title="Help | General", type='rich')   # General Tab
+            gen_emb.add_field(name="Statistic Visualization", value="Stats - Displays your stats.\n"
+                                                                    "Mstats - Displays your military stats.\n"
+                                                                    "Infra - Displays your infrastructure.",
+                              inline=False)
+            gen_emb.add_field(name="Other Features", value="Private - Creates a private channel.\n"
+                                                           "Create - Creates a nation.",
+                              inline=False)
+
+            eco_emb = discord.Embed(colour=0xdf8e1d, title="Help | Economy", type='rich')   # Economy Tab
+            eco_emb.add_field(name="Category", value="Command - Description",
+                              inline=False)
+
+            tec_emb = discord.Embed(colour=0x04a5e5, title="Help | Technology", type='rich')   # Technology Tab
+            tec_emb.add_field(name="Category", value="Command - Description",
+                              inline=False)
+
+            cus_emb = discord.Embed(colour=0x7287fd, title="Help | Customization", type='rich')   # Customization Tab
+            cus_emb.add_field(name="Name Changing", value="Rename - Changes your name to something else.",
+                              inline=False)
+
+            set_emb = discord.Embed(colour=0x7c7f93, title="Help | Settings", type='rich')   # Settings Tab
+            set_emb.add_field(name="Category", value="Command - Description",
+                              inline=False)
+
+            mil_emb = discord.Embed(colour=0xe64553, title="Help | Military", type='rich')   # Military Tab
+            mil_emb.add_field(name="Category", value="Command - Description",
+                              inline=False)
+
+            pol_emb = discord.Embed(colour=0x8839ef, title="Help | Politics", type='rich')   # Politics Tab
+            pol_emb.add_field(name="Category", value="Command - Description",
+                              inline=False)
+
+            adm_emb = discord.Embed(colour=0x40a02b, title="Help | Administration", type='rich')   # Administration Tab
+            adm_emb.add_field(name="Category", value="Command - Description",
+                              inline=False)
+
+            help_emb = await ctx.send(embed=generating)   # Prepares Embed
+            await help_emb.add_reaction('📊')
+            await help_emb.add_reaction('💶')
+            await help_emb.add_reaction('🧪')
+            await help_emb.add_reaction('🖍️')
+            await help_emb.add_reaction('🔨')
+            await help_emb.add_reaction('💥')
+            await help_emb.add_reaction('📜')
+            await help_emb.add_reaction('✒️')
+            match cmd:   # Chooses first page depending on [cmd]
+                case "eco" | "economy":
+                    await help_emb.edit(embed=eco_emb)
+                case "tec" | "tech" | "technology":
+                    await help_emb.edit(embed=tec_emb)
+                case "cus" | "custom" | "customization":
+                    await help_emb.edit(embed=cus_emb)
+                case "set" | "settings":
+                    await help_emb.edit(embed=set_emb)
+                case "mil" | "military":
+                    await help_emb.edit(embed=mil_emb)
+                case "pol" | "politics" | "politic":
+                    await help_emb.edit(embed=pol_emb)
+                case "adm" | "admin" | "pop" | "population" | "administration":
+                    await help_emb.edit(embed=adm_emb)
+                case _:
+                    await help_emb.edit(embed=gen_emb)
+
+            def chk(rec, usr):
+                return usr == ctx.author and str(rec.emoji) in ['📊', '💶', '🧪', '🖍️', '🔨', '💥', '📜', '✒️']
+
+            while True:
+                try:
+                    reaction, user = await bot.wait_for('reaction_add', timeout=60, check=chk)
+                except TimeoutError:
+                    break
+                match(str(reaction.emoji)):   # Choosing Tab based on emoji
+                    case '📊':
+                        await help_emb.edit(embed=gen_emb)
+                    case '💶':
+                        await help_emb.edit(embed=eco_emb)
+                    case '🧪':
+                        await help_emb.edit(embed=tec_emb)
+                    case '🖍️':
+                        await help_emb.edit(embed=cus_emb)
+                    case '🔨':
+                        await help_emb.edit(embed=set_emb)
+                    case '💥':
+                        await help_emb.edit(embed=mil_emb)
+                    case '📜':
+                        await help_emb.edit(embed=pol_emb)
+                    case '✒️':
+                        await help_emb.edit(embed=adm_emb)
+                    case _:
+                        break
+                await help_emb.remove_reaction(reaction.emoji, user)
+
+
+@bot.command()   # Help command and command list made specifically for devs
+async def devhelp(ctx, cmd: str = ""):
+    if dev_check(ctx.author.id):
+        global debug
+        cmd = cmd.lower()
+        match cmd:
+            case "debug_mode" | "debugmode":
+                embed = discord.Embed(colour=0xdc8a78, title="Dev Help | Debug Mode", type='rich',
+                                      description=f'Syntax: `$debug_mode`{new_line}{new_line}'
+                                                  f'Status: {debug}{new_line}{new_line}'
+                                                  f'Switches the global variable \'debug\' from on to off and vice versa. {new_line}'
+                                                  f'While on, this can do many things, but for now it only disables the error handler and prints the error to the console.{new_line}'
+                                                  f'Debug mode is switched to off on boot.')
+                await ctx.send(embed=embed)
+            case "debug" | "debug_status" | "debugstatus" | "dstatus":
+                embed = discord.Embed(colour=0xdc8a78, title="Dev Help | Debug Status", type='rich',
+                                      description=f'Syntax: `$debug_status`{new_line}{new_line}'
+                                                  f'Status: {debug}{new_line}{new_line}'
+                                                  f'Shows whether debug mode is on or off')
+                await ctx.send(embed=embed)
+            case _:
+                embed = discord.Embed(colour=0xdc8a78, title="Help | General", type='rich')  # General Tab
+                embed.add_field(name="Debug", value="debug_mode - Turns debug mode on and off.\n"
+                                                    "debug_status - Shows if debug mode is on or off.",
+                                inline=False)
+                await ctx.send(embed=embed)
+    else:
+        print(f'{ctx.author} attempted to enable debug')
+        await ctx.send(f'Permission denied: You are not a developer.')
+
+
+bot.run('INSERT BOT TOKEN HERE')
