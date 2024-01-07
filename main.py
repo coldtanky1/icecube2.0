@@ -110,6 +110,26 @@ cursor.execute('''
     ''')
 
 
+cursor.execute('''
+    CREATE TABLE IF NOT EXISTS resources(
+        name TEXT PRIMARY KEY,
+        wood INTEGER,
+        coal INTEGER,
+        iron INTEGER,
+        lead INTEGER,
+        bauxite INTEGER,
+        oil INTEGER,
+        uranium INTEGER,
+        food INTEGER,
+        steel INTEGER,
+        aluminium INTEGER,
+        gasoline INTEGER,
+        ammo INTEGER,
+        concrete INTEGER
+        )
+    ''')
+
+
 @bot.event
 async def on_ready():
     print(f"Logged in as {bot.user.name}")
@@ -151,20 +171,20 @@ async def debug_mode(ctx):
 # Private Channel Command
 @bot.command()
 async def private(ctx):
-    chname = ctx.author.name
+    ch_name = ctx.author.name
 
     def kat_chan_id(context, ch_name):  # Finds and gets id of channel
         for channel in context.guild.channels:
             if channel.name == ch_name:
                 return channel.id
 
-    if any(chname in channel.name for channel in ctx.guild.channels):  # Checks if channel already exists
-        chid = kat_chan_id(ctx, chname)
+    if any(ch_name in channel.name for channel in ctx.guild.channels):  # Checks if channel already exists
+        chid = kat_chan_id(ctx, ch_name)
         embed = discord.Embed(colour=0x8212DF, title="Instance Already Running", type='rich',
                               description=f'Cannot start another instance because an instance for you already exists in <#{str(chid)}>')
         await ctx.send(embed=embed)
     else:  # Creates Private Channel
-        topic = chname + '\'s Project Thaw private channel'
+        topic = ch_name + '\'s Project Thaw private channel'
         category = bot.get_channel()  # Private channel category DON'T FORGET TO INSERT THE ID OF THE CATEGORY YOU WANT THE PRIVATE CHANNELS TO BE IN
         overwrites = {
             discord.utils.get(ctx.guild.roles, name="Overseer"): discord.PermissionOverwrite(read_messages=True),
@@ -172,9 +192,17 @@ async def private(ctx):
             ctx.message.guild.default_role: discord.PermissionOverwrite(read_messages=False),
             ctx.author: discord.PermissionOverwrite(read_messages=True)
         }
-        await ctx.guild.create_text_channel(name=chname, category=category, overwrites=overwrites, topic=topic)
-        channel = get(ctx.guild.channels, name=chname)  # Gets channel
-        msg = await channel.send(f'<@{ctx.author.id}>')
+        await ctx.guild.create_text_channel(name=ch_name, category=category, overwrites=overwrites, topic=topic)
+        asyncio.sleep(10)
+        channel = get(ctx.guild.channels, name=ch_name)  # Gets channel
+        print(f"Channel: {channel}")
+        if channel:
+            print(f"Channel Name: {channel.name}")
+            print(f"Channel ID: {channel.id}")
+            msg = await channel.send(f'<@{ctx.author.id}>')
+            await msg.delete()
+        else:
+            print("Error: Channel is None")
         await msg.delete()
         await asyncio.sleep(3600)  # Time before channel gets deleted
         await channel.delete()
@@ -241,6 +269,12 @@ async def create(ctx):
         (nat_name, 0, 0, 0, 0, 0, 0, 0))
     conn.commit()
 
+    # Add base resources to the user
+    cursor.execute(
+        'INSERT INTO resources (name, wood, coal, iron, lead, bauxite, oil, uranium, food, steel, aluminium, gasoline, ammo, concrete) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        (nat_name, 500, 300, 50, 50, 0, 50, 0, 10000, 50, 50, 100, 1000, 0))
+    conn.commit()
+
     print(f"Successfully added stats to {user_id}({nat_name})")
 
     # Add base infra stats to the user
@@ -290,6 +324,9 @@ async def rename(ctx, new_name: str):
         # updates the infra table
         cursor.execute('UPDATE infra SET name = ? WHERE name = ?', (new_name, nation_name))
         conn.commit()
+        # updates the resources table
+        cursor.execute('UPDATE resources SET name = ? WHERE name = ?', (new_name, nation_name))
+        conn.commit()
 
         embed = discord.Embed(
             title='Nation Rename',
@@ -329,11 +366,11 @@ async def stats(ctx):
             )
             embed.add_field(name='🫅 Ruler', value=f"<@{user_id}>", inline=False)
             embed.add_field(name='', value='', inline=False)
-            embed.add_field(name='🏆 Nation Score', value=f'{nation_score}', inline=False)
+            embed.add_field(name='🏆 Nation Score', value=f'{nation_score:,}', inline=False)
             embed.add_field(name='', value='', inline=False)
-            embed.add_field(name='📈 Gross Domestic Product', value=f'{gdp}', inline=False)
+            embed.add_field(name='📈 Gross Domestic Product', value=f'{gdp:,}', inline=False)
             embed.add_field(name='', value='', inline=False)
-            embed.add_field(name='👪 Population', value=f'{population}', inline=False)
+            embed.add_field(name='👪 Population', value=f'{population:,}', inline=False)
             await ctx.send(embed=embed)
         else:
             embed = discord.Embed(colour=0xEF2F73, title="Error", type='rich',
@@ -371,17 +408,17 @@ async def mstats(ctx):
                 description='',
                 color=0xe64553
             )
-            embed.add_field(name='🪖 Troops', value=f'{troops}', inline=False)
+            embed.add_field(name='🪖 Troops', value=f'{troops:,}', inline=False)
             embed.add_field(name='', value='', inline=False)
-            embed.add_field(name='⛟ Tanks', value=f'{tanks}', inline=False)
+            embed.add_field(name='⛟ Tanks', value=f'{tanks:,}', inline=False)
             embed.add_field(name='', value='', inline=False)
-            embed.add_field(name='💥 Artillery', value=f'{artillery}', inline=False)
+            embed.add_field(name='💥 Artillery', value=f'{artillery:,}', inline=False)
             embed.add_field(name='', value='', inline=False)
-            embed.add_field(name='💥 Anti-Air', value=f'{anti_air}', inline=False)
+            embed.add_field(name='💥 Anti-Air', value=f'{anti_air:,}', inline=False)
             embed.add_field(name='', value='', inline=False)
-            embed.add_field(name='🛫 Planes', value=f'{planes}', inline=False)
+            embed.add_field(name='🛫 Planes', value=f'{planes:,}', inline=False)
             embed.add_field(name='', value='', inline=False)
-            embed.add_field(name='🎖 Barracks', value=f'{barracks}', inline=False)
+            embed.add_field(name='🎖 Barracks', value=f'{barracks:,}', inline=False)
             embed.add_field(name='', value='', inline=False)
             embed.add_field(name='🔫 Weapon', value=f'{weapon}', inline=False)
             await ctx.send(embed=embed)
@@ -504,6 +541,166 @@ async def infra(ctx):
         await ctx.send(embed=embed)
 
 
+@bot.command()
+async def res(ctx):
+    user_id = ctx.author.id
+
+    # fetch user nation_name
+    cursor.execute('SELECT nation_name FROM user_info WHERE user_id = ?', (user_id,))
+    result = cursor.fetchone()
+
+    if result:
+        nation_name = result[0]
+
+        # fetch user's production infra
+        cursor.execute(
+            'SELECT name, basic_house, small_flat, apt_complex, skyscraper, lumber_mill, coal_mine, iron_mine, lead_mine, bauxite_mine, oil_derrick, uranium_mine, farm, aluminium_factory, steel_factory, oil_refinery, ammo_factory, concrete_factory FROM infra WHERE name = ?',
+            (nation_name,))
+        infra_result = cursor.fetchone()
+
+
+        if infra_result:
+            name, basic_house, small_flat, apt_complex, skyscraper, lumber_mill, coal_mine, iron_mine, lead_mine, bauxite_mine, oil_derrick, uranium_mine, farm, aluminium_factory, steel_factory, oil_refinery, ammo_factory, concrete_factory = infra_result
+
+            # The production of each resource
+            prod_wood = lumber_mill * 2
+            prod_coal = coal_mine * 1.2
+            prod_iron = iron_mine * 1
+            prod_lead = lead_mine * 0.8
+            prod_bauxite = bauxite_mine * 0.6
+            prod_oil = oil_derrick * 1
+            prod_uranium = uranium_mine * 0.05
+            prod_farm = farm * 10
+            prod_aluminium = aluminium_factory * 0.4
+            prod_steel = steel_factory * 0.3
+            prod_gas = oil_refinery * 0.2
+            prod_ammo = ammo_factory * 0.5
+            prod_concrete = concrete_factory * 0.6
+
+
+            # The consumption of each resource
+            usage_iron_wood = prod_wood * 0
+            usage_lead_wood = prod_wood * 0
+            usage_bauxite_wood = prod_wood * 0
+            usage_iron_coal = prod_coal * 0
+            usage_lead_coal = prod_coal * 0
+            usage_bauxite_coal = prod_coal * 0
+            usage_iron_iron = prod_iron * 0
+            usage_lead_iron = prod_iron * 0
+            usage_bauxite_iron = prod_iron * 0
+            usage_iron_lead = prod_lead * 0
+            usage_lead_lead = prod_lead * 0
+            usage_bauxite_lead = prod_lead * 0
+            usage_iron_bauxite = prod_bauxite * 0
+            usage_lead_bauxite = prod_bauxite * 0
+            usage_bauxite_bauxite = prod_bauxite * 0
+            usage_iron_oil = prod_oil * 0
+            usage_lead_oil = prod_oil * 0
+            usage_bauxite_oil = prod_oil * 0
+            usage_iron_uranium = prod_uranium * 0
+            usage_lead_uranium = prod_uranium * 0
+            usage_bauxite_uranium = prod_uranium * 0
+            usage_iron_food = prod_farm * 0
+            usage_lead_food = prod_farm * 0
+            usage_bauxite_food = prod_farm * 0
+            usage_iron_aluminium = prod_aluminium * 0.2
+            usage_lead_aluminium = prod_aluminium * 0.1
+            usage_bauxite_aluminium = prod_aluminium * 1.2
+            usage_iron_steel = prod_steel * 1.4
+            usage_lead_steel = prod_steel * 0.3
+            usage_bauxite_steel = prod_steel * 0.3
+            usage_oil_gas = prod_gas * 2
+            usage_lead_gas = prod_gas * 0
+            usage_bauxite_gas = prod_gas * 0
+            usage_iron_ammo = prod_ammo * 0.2
+            usage_lead_ammo = prod_ammo * 1.1
+            usage_bauxite_ammo = prod_ammo * 0
+            usage_iron_concrete = prod_concrete * 0.5
+            usage_lead_concrete = prod_concrete * 0
+            usage_bauxite_concrete = prod_concrete * 0
+
+            final_usage_iron = usage_iron_wood + usage_iron_coal + usage_iron_iron + usage_iron_lead + usage_iron_bauxite + usage_iron_oil + usage_iron_uranium + usage_iron_food + usage_iron_aluminium + usage_iron_steel + usage_iron_ammo + usage_iron_concrete
+            final_usage_lead = usage_lead_wood + usage_lead_coal + usage_lead_iron + usage_lead_lead + usage_lead_bauxite + usage_lead_oil + usage_lead_uranium + usage_lead_food + usage_lead_aluminium + usage_lead_steel + usage_lead_ammo + usage_lead_concrete
+            final_usage_bauxite = usage_bauxite_wood + usage_bauxite_coal + usage_bauxite_iron + usage_bauxite_lead + usage_bauxite_bauxite + usage_bauxite_oil + usage_bauxite_uranium + usage_bauxite_food + usage_bauxite_aluminium + usage_bauxite_steel + usage_bauxite_ammo + usage_bauxite_concrete
+
+            final_prod_iron = prod_iron - final_usage_iron
+            final_prod_lead = prod_lead - final_usage_lead
+            final_prod_bauxite = prod_bauxite - final_usage_bauxite
+            final_prod_oil = prod_oil - usage_oil_gas
+
+
+
+            embed = discord.Embed(
+                title='Production',
+                description=f'Display {name}\'s production.',
+                color=discord.Color.red()
+            )
+            embed.add_field(name='⛏ Mined Resources', value='', inline=False)
+            embed.add_field(name='🏭 Manufactured Resources', value='', inline=False)
+
+            mined_resources = [
+                f'Wood: {prod_wood:,}',
+                f'Coal: {prod_coal:,}',
+                f'Iron: {final_prod_iron:,}',
+                f'Lead: {final_prod_lead:,}',
+                f'Bauxite: {final_prod_bauxite:,}',
+                f'Oil: {final_prod_oil:,}',
+                f'Uranium: {prod_uranium:,}',
+                f'Food: {prod_farm:,}',
+            ]
+
+            manufactured_resources = [
+                f'Aluminium: {prod_aluminium:,}',
+                f'Steel: {prod_steel:,}',
+                f'Gasoline: {prod_gas:,}',
+                f'Ammo: {prod_ammo:,}',
+                f'Concrete: {prod_concrete:,}',
+            ]
+
+            pages = [mined_resources, manufactured_resources]
+            current_page = 0
+
+            message = await ctx.send(embed=embed)
+
+            # Add reactions for navigation
+            await message.add_reaction('◀')
+            await message.add_reaction('▶')
+
+            def check(reaction, user, current_page, max_page):
+                return user == ctx.author and str(reaction.emoji) in ['◀', '▶'] and 0 <= current_page < max_page
+
+            while True:
+                try:
+                    reaction, user = await bot.wait_for('reaction_add', timeout=60.0, check=lambda r, u: check(r, u, current_page, len(pages)))
+
+                    if str(reaction.emoji) == '▶' and current_page < len(pages) - 1:
+                        current_page += 1
+                    elif str(reaction.emoji) == '◀' and current_page > 0:
+                        current_page -= 1
+
+                    embed.clear_fields()
+                    embed.add_field(name='⛏ Mined Resources' if current_page == 0 else '🏭 Manufactured Resources', value='\n'.join(pages[current_page]), inline=False)
+                    await message.edit(embed=embed)
+                    await message.remove_reaction(reaction, user)
+
+                except TimeoutError:
+                    break
+
+            # Remove reactions when the loop ends
+            await message.clear_reactions()
+
+        else:
+            embed = discord.Embed(colour=0xEF2F73, title="Error", type='rich',
+                                  description=f'Cannot find stats.')
+            await ctx.send(embed=embed)
+    else:
+        embed = discord.Embed(colour=0xEF2F73, title="Error", type='rich',
+                              description=f'You do not have a nation.{new_line}'
+                                          f'To create one, type `$create`.')
+        await ctx.send(embed=embed)
+
+
+
 # Help Command
 @bot.command()
 async def help(ctx, cmd: str = ""):
@@ -543,6 +740,12 @@ async def help(ctx, cmd: str = ""):
                                               f'Displays your nation\'s statistics.')
             await ctx.send(embed=embed)
 
+        case "res":
+            embed = discord.Embed(colour=0xdd7878, title="Help: Resource", type='rich',
+                                  description=f'Syntax: `$res`{new_line}{new_line}'
+                                              f'Displays your nation\'s production.')
+            await ctx.send(embed=embed)
+
         case _:   # Actual command list
             generating = discord.Embed(colour=0xdce0e8, title="Help", type='rich',
                                        description="Generating help pages...")
@@ -557,7 +760,7 @@ async def help(ctx, cmd: str = ""):
                               inline=False)
 
             eco_emb = discord.Embed(colour=0xdf8e1d, title="Help | Economy", type='rich')   # Economy Tab
-            eco_emb.add_field(name="Category", value="Command - Description",
+            eco_emb.add_field(name="Category", value="Res - Displays your nation's production.",
                               inline=False)
 
             tec_emb = discord.Embed(colour=0x04a5e5, title="Help | Technology", type='rich')   # Technology Tab
@@ -672,4 +875,4 @@ async def devhelp(ctx, cmd: str = ""):
         await ctx.send(f'Permission denied: You are not a developer.')
 
 
-bot.run('INSERT BOT TOKEN HERE')
+bot.run('MTE2ODk2MTc1MDYxMjMyODU0OQ.GsgFyu._tF4AJRJGYMbPaAYS1jJqxkPrEnNGJ6hWvgQyE')

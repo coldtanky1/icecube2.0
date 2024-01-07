@@ -16,3 +16,9 @@ pysqlite3
 
 asyncio
 `pip install asyncio`
+
+
+# Changelog VER 01
+- Added new SQL table for resources.
+- Added "res" command to display resource production.
+- Added "res" command to help menu.
