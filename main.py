@@ -1184,4 +1184,8 @@ async def devhelp(ctx, cmd: str = ""):
         await ctx.send(f'Permission denied: You are not a developer.')
 
 
+<<<<<<< HEAD
 bot.run('TOKEN_HERE')
+=======
+bot.run('TOKEN_HERE')
+>>>>>>> origin/main
