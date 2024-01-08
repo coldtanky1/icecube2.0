@@ -19,9 +19,7 @@ debug = False
 # you can't make barracks
 # you can't make AA
 # you can't make artillery
-# you can only view infra, not make it
 # you can't view info about infra
-# there aren't emojis for infra because I am too lazy (deal with it)
 # good luck making most of that stuff rev (hehe)
 
 
@@ -699,6 +697,303 @@ async def res(ctx):
                                           f'To create one, type `$create`.')
         await ctx.send(embed=embed)
 
+# Reserve Command
+@bot.command()
+async def reserve(ctx):
+    user_id = ctx.author.id
+
+    # fetch user nation_name
+    cursor.execute('SELECT nation_name FROM user_info WHERE user_id = ?', (user_id,))
+    result = cursor.fetchone()
+
+    if result:
+        nation_name = result[0]
+
+        # fetch user's resources
+        cursor.execute(
+            'SELECT name, wood, coal, iron, lead, bauxite, oil, uranium, food, steel, aluminium, gasoline, ammo, concrete FROM resources WHERE name = ?',
+            (nation_name,))
+        resource_result = cursor.fetchone()
+
+        if resource_result:
+            name, wood, coal, iron, lead, bauxite, oil, uranium, food, steel, aluminium, gasoline, ammo, concrete = resource_result
+
+            embed=discord.Embed(
+                title=f'{name}\'s Reserves',
+                description='Displays nation\'s national reserves.',
+                color=0x4CAF50)
+            embed.add_field(name=f'Wood: {wood:,}', value='', inline=False)
+            embed.add_field(name=f'Coal: {coal:,}', value='', inline=False)
+            embed.add_field(name=f'Iron: {iron:,}', value='', inline=False)
+            embed.add_field(name=f'Lead: {lead:,}', value='', inline=False)
+            embed.add_field(name=f'Bauxite: {bauxite:,}', value='', inline=False)
+            embed.add_field(name=f'Oil: {oil:,}', value='', inline=False)
+            embed.add_field(name=f'Uranium: {uranium:,}', value='', inline=False)
+            embed.add_field(name=f'Food: {food:,}', value='', inline=False)
+            embed.add_field(name=f'Steel: {steel:,}', value='', inline=False)
+            embed.add_field(name=f'Aluminium: {aluminium:,}', value='', inline=False)
+            embed.add_field(name=f'Gasoline: {gasoline:,}', value='', inline=False)
+            embed.add_field(name=f'Ammo: {ammo:,}', value='', inline=False)
+            embed.add_field(name=f'Concrete: {concrete:,}', value='', inline=False)
+            await ctx.send(embed=embed)
+
+        else:
+            embed = discord.Embed(colour=0xEF2F73, title="Error", type='rich',
+                                  description=f'Cannot find stats.')
+            await ctx.send(embed=embed)
+    else:
+        embed = discord.Embed(colour=0xEF2F73, title="Error", type='rich',
+                              description=f'You do not have a nation.{new_line}'
+                                          f'To create one, type `$create`.')
+        await ctx.send(embed=embed)
+
+
+
+# Construct Command
+@bot.command()
+async def construct(ctx, building: str, amount: int):
+    user_id = ctx.author.id
+    building = building.lower()
+
+    if amount <= 0:
+        await ctx.send("Invalid building amount, try a positive number.")
+        return
+
+
+    # fetch user nation_name
+    cursor.execute('SELECT nation_name FROM user_info WHERE user_id = ?', (user_id,))
+    result = cursor.fetchone()
+
+    if result:
+        nation_name = result[0]
+
+        # fetch user's resources
+        cursor.execute(
+            'SELECT name, wood, coal, iron, lead, bauxite, oil, uranium, food, steel, aluminium, gasoline, ammo, concrete FROM resources WHERE name = ?',
+            (nation_name,))
+        res_result = cursor.fetchone()
+
+        # fetch user's production infra
+        cursor.execute(
+            'SELECT name, basic_house, small_flat, apt_complex, skyscraper, lumber_mill, coal_mine, iron_mine, lead_mine, bauxite_mine, oil_derrick, uranium_mine, farm, aluminium_factory, steel_factory, oil_refinery, ammo_factory, concrete_factory FROM infra WHERE name = ?',
+            (nation_name,))
+        infra_result = cursor.fetchone()
+
+        if infra_result:
+            name, basic_house, small_flat, apt_complex, skyscraper, lumber_mill, coal_mine, iron_mine, lead_mine, bauxite_mine, oil_derrick, uranium_mine, farm, aluminium_factory, steel_factory, oil_refinery, ammo_factory, concrete_factory = infra_result
+
+
+            match building: # Each building the user wants to build. You can reuse later for info command.
+                case "basic_house":
+                    basichouse_amt = amount
+                    basichouse_wood = basichouse_amt * 2
+                    basichouse_conrete = basichouse_amt * 0.6
+                    embed = discord.Embed(colour=0xdd7878, title="Construct: Basic House", type='rich',
+                                                            description=f'{basichouse_amt:,} will be constructed.{new_line}{new_line}'
+                                                                        f'The basic houses will cost: {basichouse_wood:,} Wood{new_line}'
+                                                                        f'The basic houses will cost: {basichouse_conrete:,} Concrete')
+                    await ctx.send(embed=embed)
+
+                    try:
+                        await ctx.send("Would you like to proceed? Respond with y/n.")
+
+                        def check(message):
+                            return message.content.lower() in ['y', 'n'] 
+
+                        response_message = await bot.wait_for('message', timeout=30, check=check)
+
+
+                        if response_message.content.lower() == 'y':
+                            constructing = discord.Embed(colour=0xdd7878, title='Construct', type='rich',
+                                                                description='Constructing...')
+                            construct_msg = await ctx.send(embed=constructing)
+
+
+                            if res_result:
+                                name, wood, coal, iron, lead, bauxite, oil, uranium, food, steel, aluminium, gasoline, ammo, concrete = res_result
+
+                                # Check if user has enough wood and concrete
+                                if (wood > basichouse_wood) and (concrete > basichouse_conrete):
+
+                                    # If user has enough wood and concrete then it proceeds normally.
+                                    # Update the resources table
+                                    cursor.execute('''
+                                        UPDATE resources SET
+                                        wood = wood - ?,
+                                        concrete = concrete - ?
+                                        WHERE name = ?
+                                    ''', (basichouse_wood, basichouse_conrete, nation_name))
+
+                                    cursor.execute('UPDATE infra SET basic_house = basic_house + ? WHERE name = ?', (basichouse_amt, nation_name))
+
+                                    # Commit the changes to the database
+                                    conn.commit()
+
+                                    cons_done = discord.Embed(colour=0xdd7878, title='Contruct', type='rich',
+                                                            description='Construction complete!')
+                                    await construct_msg.edit(embed=cons_done)
+
+                                else:
+                                    cons_error = discord.Embed(colour=0xEF2F73, title='Error', type='rich',
+                                                            description='You do not have enough resources.')
+                                    await construct_msg.edit(embed=cons_error)
+                                    return
+                        else:
+                            await ctx.send("Aborting.")
+                            return
+                    except asyncio.TimeoutError:
+                        return await ctx.send("You took too long to respond.")
+        else:
+            embed = discord.Embed(colour=0xEF2F73, title="Error", type='rich',
+                                  description=f'Cannot find stats.')
+            await ctx.send(embed=embed)
+    else:
+        embed = discord.Embed(colour=0xEF2F73, title="Error", type='rich',
+                              description=f'You do not have a nation.{new_line}'
+                                          f'To create one, type `$create`.')
+        await ctx.send(embed=embed)
+
+
+
+
+
+# Update Command
+@bot.command()
+async def update(ctx):
+    user_id = ctx.author.id
+
+    # fetch user nation_name
+    cursor.execute('SELECT nation_name FROM user_info WHERE user_id = ?', (user_id,))
+    result = cursor.fetchone()
+
+    if result:
+        nation_name = result[0]
+
+        # fetch user's production infra
+        cursor.execute(
+            'SELECT name, basic_house, small_flat, apt_complex, skyscraper, lumber_mill, coal_mine, iron_mine, lead_mine, bauxite_mine, oil_derrick, uranium_mine, farm, aluminium_factory, steel_factory, oil_refinery, ammo_factory, concrete_factory FROM infra WHERE name = ?',
+            (nation_name,))
+        infra_result = cursor.fetchone()
+
+
+        if infra_result:
+            name, basic_house, small_flat, apt_complex, skyscraper, lumber_mill, coal_mine, iron_mine, lead_mine, bauxite_mine, oil_derrick, uranium_mine, farm, aluminium_factory, steel_factory, oil_refinery, ammo_factory, concrete_factory = infra_result
+
+            # The production of each resource
+            prod_wood = lumber_mill * 2
+            prod_coal = coal_mine * 1.2
+            prod_iron = iron_mine * 1
+            prod_lead = lead_mine * 0.8
+            prod_bauxite = bauxite_mine * 0.6
+            prod_oil = oil_derrick * 1
+            prod_uranium = uranium_mine * 0.05
+            prod_farm = farm * 10
+            prod_aluminium = aluminium_factory * 0.4
+            prod_steel = steel_factory * 0.3
+            prod_gas = oil_refinery * 0.2
+            prod_ammo = ammo_factory * 0.5
+            prod_concrete = concrete_factory * 0.6
+
+
+            # The consumption of each resource
+            usage_iron_wood = prod_wood * 0
+            usage_lead_wood = prod_wood * 0
+            usage_bauxite_wood = prod_wood * 0
+            usage_iron_coal = prod_coal * 0
+            usage_lead_coal = prod_coal * 0
+            usage_bauxite_coal = prod_coal * 0
+            usage_iron_iron = prod_iron * 0
+            usage_lead_iron = prod_iron * 0
+            usage_bauxite_iron = prod_iron * 0
+            usage_iron_lead = prod_lead * 0
+            usage_lead_lead = prod_lead * 0
+            usage_bauxite_lead = prod_lead * 0
+            usage_iron_bauxite = prod_bauxite * 0
+            usage_lead_bauxite = prod_bauxite * 0
+            usage_bauxite_bauxite = prod_bauxite * 0
+            usage_iron_oil = prod_oil * 0
+            usage_lead_oil = prod_oil * 0
+            usage_bauxite_oil = prod_oil * 0
+            usage_iron_uranium = prod_uranium * 0
+            usage_lead_uranium = prod_uranium * 0
+            usage_bauxite_uranium = prod_uranium * 0
+            usage_iron_food = prod_farm * 0
+            usage_lead_food = prod_farm * 0
+            usage_bauxite_food = prod_farm * 0
+            usage_iron_aluminium = prod_aluminium * 0.2
+            usage_lead_aluminium = prod_aluminium * 0.1
+            usage_bauxite_aluminium = prod_aluminium * 1.2
+            usage_iron_steel = prod_steel * 1.4
+            usage_lead_steel = prod_steel * 0.3
+            usage_bauxite_steel = prod_steel * 0.3
+            usage_oil_gas = prod_gas * 2
+            usage_lead_gas = prod_gas * 0
+            usage_bauxite_gas = prod_gas * 0
+            usage_iron_ammo = prod_ammo * 0.2
+            usage_lead_ammo = prod_ammo * 1.1
+            usage_bauxite_ammo = prod_ammo * 0
+            usage_iron_concrete = prod_concrete * 0.5
+            usage_lead_concrete = prod_concrete * 0
+            usage_bauxite_concrete = prod_concrete * 0
+
+            final_usage_iron = usage_iron_wood + usage_iron_coal + usage_iron_iron + usage_iron_lead + usage_iron_bauxite + usage_iron_oil + usage_iron_uranium + usage_iron_food + usage_iron_aluminium + usage_iron_steel + usage_iron_ammo + usage_iron_concrete
+            final_usage_lead = usage_lead_wood + usage_lead_coal + usage_lead_iron + usage_lead_lead + usage_lead_bauxite + usage_lead_oil + usage_lead_uranium + usage_lead_food + usage_lead_aluminium + usage_lead_steel + usage_lead_ammo + usage_lead_concrete
+            final_usage_bauxite = usage_bauxite_wood + usage_bauxite_coal + usage_bauxite_iron + usage_bauxite_lead + usage_bauxite_bauxite + usage_bauxite_oil + usage_bauxite_uranium + usage_bauxite_food + usage_bauxite_aluminium + usage_bauxite_steel + usage_bauxite_ammo + usage_bauxite_concrete
+
+            final_prod_iron = prod_iron - final_usage_iron
+            final_prod_lead = prod_lead - final_usage_lead
+            final_prod_bauxite = prod_bauxite - final_usage_bauxite
+            final_prod_oil = prod_oil - usage_oil_gas
+
+            updating_emb = discord.Embed(
+                title='Update',
+                type='rich',
+                description='Updating...',
+                color=0x4CAF50
+                )
+            update_emb = await ctx.send(embed=updating_emb)
+
+
+            # Update the resources table
+            cursor.execute('''
+                UPDATE resources SET
+                wood = wood + ?,
+                coal = coal + ?,
+                iron = iron + ?,
+                lead = lead + ?,
+                bauxite = bauxite + ?,
+                oil = oil + ?,
+                uranium = uranium + ?,
+                food = food + ?,
+                aluminium = aluminium + ?,
+                steel = steel + ?,
+                gasoline = gasoline + ?,
+                ammo = ammo + ?,
+                concrete = concrete + ?
+                WHERE name = ?
+            ''', (prod_wood, prod_coal, final_prod_iron, final_prod_lead, final_prod_bauxite, final_prod_oil, prod_uranium,
+                  prod_farm, prod_aluminium, prod_steel, prod_gas, prod_ammo, prod_concrete, nation_name))
+
+            # Commit the changes to the database
+            conn.commit()
+
+            upd_done_emb = discord.Embed(
+                title='Update',
+                type='rich',
+                description="Updating complete!",
+                color=0x4CAF50
+                )
+            await update_emb.edit(embed=upd_done_emb)
+        else:
+            embed = discord.Embed(colour=0xEF2F73, title="Error", type='rich',
+                                  description=f'Cannot find stats.')
+            await ctx.send(embed=embed)
+    else:
+        embed = discord.Embed(colour=0xEF2F73, title="Error", type='rich',
+                              description=f'You do not have a nation.{new_line}'
+                                          f'To create one, type `$create`.')
+        await ctx.send(embed=embed)
+
 
 
 # Help Command
@@ -746,6 +1041,18 @@ async def help(ctx, cmd: str = ""):
                                               f'Displays your nation\'s production.')
             await ctx.send(embed=embed)
 
+        case "reserve":
+            embed = discord.Embed(colour=0xdd7878, title="Help: Reserve", type='rich',
+                                  description=f'Syntax: `$reserve`{new_line}{new_line}'
+                                              f'Displays your nation\'s national reserves.')
+            await ctx.send(embed=embed)
+
+        case "update":
+            embed = discord.Embed(colour=0xdd7878, title="Help: Update", type='rich',
+                                  description=f'Syntax: `$update`{new_line}{new_line}'
+                                              f'Updates your nation\'s statistics.')
+            await ctx.send(embed=embed)
+
         case _:   # Actual command list
             generating = discord.Embed(colour=0xdce0e8, title="Help", type='rich',
                                        description="Generating help pages...")
@@ -753,14 +1060,16 @@ async def help(ctx, cmd: str = ""):
             gen_emb = discord.Embed(colour=0xea76cb, title="Help | General", type='rich')   # General Tab
             gen_emb.add_field(name="Statistic Visualization", value="Stats - Displays your stats.\n"
                                                                     "Mstats - Displays your military stats.\n"
-                                                                    "Infra - Displays your infrastructure.",
+                                                                    "Infra - Displays your infrastructure.\n"
+                                                                    "Update - Updates your nation's statistics.",
                               inline=False)
             gen_emb.add_field(name="Other Features", value="Private - Creates a private channel.\n"
                                                            "Create - Creates a nation.",
                               inline=False)
 
             eco_emb = discord.Embed(colour=0xdf8e1d, title="Help | Economy", type='rich')   # Economy Tab
-            eco_emb.add_field(name="Category", value="Res - Displays your nation's production.",
+            eco_emb.add_field(name="Economy", value="Res - Displays your nation's production.\n"
+                                                    "Reserve - Displays your nation's national reserves.",
                               inline=False)
 
             tec_emb = discord.Embed(colour=0x04a5e5, title="Help | Technology", type='rich')   # Technology Tab
@@ -875,4 +1184,4 @@ async def devhelp(ctx, cmd: str = ""):
         await ctx.send(f'Permission denied: You are not a developer.')
 
 
-bot.run('MTE2ODk2MTc1MDYxMjMyODU0OQ.GsgFyu._tF4AJRJGYMbPaAYS1jJqxkPrEnNGJ6hWvgQyE')
+bot.run('TOKEN_HERE')
