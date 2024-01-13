@@ -16,7 +16,7 @@ async def load():
 
 async def main():
     await load()
-    await bot.start('MTE2ODk2MTc1MDYxMjMyODU0OQ.G9eNMK.B5pIWZKx0vxWe3fTh09b61GdkjZZW4nVSvFkp0')
+    await bot.start('TOKEN_HERE')
 
 
 # Connect to the sqlite DB (it will create a new DB if it doesn't exit)
