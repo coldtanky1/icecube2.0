@@ -6,6 +6,9 @@ import discord
 from discord.ext import commands
 from discord.utils import get
 
+# Importing game functions.
+from game_functions.PopGrowth import *
+
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix="$", intents=intents, case_insensitive=True)
 
@@ -16,7 +19,7 @@ async def load():
 
 async def main():
     await load()
-    await bot.start('MTE2ODk2MTc1MDYxMjMyODU0OQ.G9eNMK.B5pIWZKx0vxWe3fTh09b61GdkjZZW4nVSvFkp0')
+    await bot.start('MTE2ODk2MTc1MDYxMjMyODU0OQ.GZ7iR3.ZiNFKKd6_sw7bHr5uRUGNX_ffUgWP5fiyB3-vs')
 
 
 # Connect to the sqlite DB (it will create a new DB if it doesn't exit)
@@ -35,7 +38,10 @@ cursor.execute('''
         name TEXT PRIMARY KEY,
         nation_score INTEGER,
         gdp INTEGER,
-        population INTEGER,
+        child INTEGER,
+        teen INTEGER,
+        adult INTEGER,
+        elder INTEGER,
         balance INTEGER
         )
     ''')
@@ -117,7 +123,7 @@ async def ping(ctx):
 user_last_update = {}
 
 @bot.command()
-@commands.cooldown(1, 3600, commands.BucketType.user)
+@commands.cooldown(1, 10, commands.BucketType.user)
 async def update(ctx):
     user_id = ctx.author.id
 
@@ -131,7 +137,7 @@ async def update(ctx):
         elapsed_time = current_time - last_update_time
 
         # Calculate the number of turns accumulated during the elapsed time
-        turns_accumulated = int(elapsed_time / 3600)
+        turns_accumulated = int(elapsed_time / 10)
 
         # Update the last update time
         user_last_update[user_id] = current_time
@@ -142,6 +148,8 @@ async def update(ctx):
 
     if result:
         nation_name = result[0]
+
+        popgrowth(user_id)
 
         # fetch user's production infra
         cursor.execute(
@@ -160,6 +168,8 @@ async def update(ctx):
             'SELECT name, wood, coal, iron, lead, bauxite, oil, uranium, food, steel, aluminium, gasoline, ammo, concrete FROM resources WHERE name = ?',
             (nation_name,))
         res_result = cursor.fetchone()
+
+        # Function to update Pop.
 
 
         if infra_result and mil_result and res_result:

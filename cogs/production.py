@@ -33,14 +33,27 @@ class Production(commands.Cog):
 
             # fetch user's production infra
             cursor.execute(
-                'SELECT name, basic_house, small_flat, apt_complex, skyscraper, lumber_mill, coal_mine, iron_mine, lead_mine, bauxite_mine, oil_derrick, uranium_mine, farm, aluminium_factory, steel_factory, oil_refinery, ammo_factory, concrete_factory FROM infra WHERE name = ?',
+                'SELECT name, basic_house, small_flat, apt_complex, skyscraper, lumber_mill, coal_mine, iron_mine, lead_mine, bauxite_mine, oil_derrick, uranium_mine, farm, aluminium_factory, steel_factory, oil_refinery, ammo_factory, concrete_factory, militaryfactory FROM infra WHERE name = ?',
                 (nation_name,))
             infra_result = cursor.fetchone()
+
+            # fetch user's military stats
+            cursor.execute(
+                'SELECT name_nation, troops, planes, weapon, tanks, artillery, anti_air, barracks, tank_factory, plane_factory, artillery_factory, anti_air_factory FROM user_mil WHERE name_nation = ?',
+                (nation_name,))
+            mil_result = cursor.fetchone()
 
 
             if infra_result and res_result:
                 name, basic_house, small_flat, apt_complex, skyscraper, lumber_mill, coal_mine, iron_mine, lead_mine, bauxite_mine, oil_derrick, uranium_mine, farm, aluminium_factory, steel_factory, oil_refinery, ammo_factory, concrete_factory, militaryfactory = infra_result
                 name, wood, coal, iron, lead, bauxite, oil, uranium, food, steel, aluminium, gasoline, ammo, concrete = res_result
+                name_nation, troops, planes, weapon, tanks, artillery, anti_air, barracks, tank_factory, plane_factory, artillery_factory, anti_air_factory = mil_result
+
+                # the production of military equipment.
+                prod_aa = anti_air_factory * militaryfactory // 40
+                prod_arty = artillery_factory * militaryfactory // 40
+                prod_plane = plane_factory * militaryfactory // 45
+                prod_tank = tank_factory * militaryfactory // 42 
 
                 # The production of each resource
                 prod_wood = lumber_mill * 2
@@ -143,7 +156,14 @@ class Production(commands.Cog):
                         f'Concrete: {prod_concrete:,}',
                     ]
 
-                    pages = [mined_resources, manufactured_resources]
+                    mil_production = [
+                        f'Tanks: {prod_tank:,}',
+                        f'Planes: {prod_plane:,}',
+                        f'Artillery: {prod_arty:,}',
+                        f'Anti-Air: {prod_aa:,}',
+                    ]
+
+                    pages = [mined_resources, manufactured_resources, mil_production]
                     current_page = 0
 
                     message = await ctx.send(embed=embed)
@@ -185,6 +205,7 @@ class Production(commands.Cog):
                 )
                 embed.add_field(name='⛏ Mined Resources', value='', inline=False)
                 embed.add_field(name='🏭 Manufactured Resources', value='', inline=False)
+                embed.add_field(name='🛡 Military Production', value='', inline=False)
 
                 mined_resources = [
                     f'Wood: {prod_wood:,}',
@@ -206,13 +227,13 @@ class Production(commands.Cog):
                 ]
 
                 mil_production = [
-                    f'Tanks: ',
-                    f'Planes: ',
-                    f'Artillery: ',
-                    f'Anti-Air: ',
+                    f'Tanks: {prod_tank:,}',
+                    f'Planes: {prod_plane:,}',
+                    f'Artillery: {prod_arty:,}',
+                    f'Anti-Air: {prod_aa:,}',
                 ]
 
-                pages = [mined_resources, manufactured_resources]
+                pages = [mined_resources, manufactured_resources, mil_production]
                 current_page = 0
 
                 message = await ctx.send(embed=embed)
@@ -235,6 +256,14 @@ class Production(commands.Cog):
 
                         embed.clear_fields()
                         embed.add_field(name='⛏ Mined Resources' if current_page == 0 else '🏭 Manufactured Resources', value='\n'.join(pages[current_page]), inline=False)
+
+                        # Add the "Military Production" field
+                        if current_page == 2:
+                            embed.add_field(
+                                name='🛡 Military Production',
+                                value='\n'.join(pages[current_page]),
+                                inline=False
+                            )
                         await message.edit(embed=embed)
                         await message.remove_reaction(reaction, user)
 

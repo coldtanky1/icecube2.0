@@ -27,11 +27,14 @@ class Stats(commands.Cog):
             nation_name = result[0]
 
             # fetch user stats
-            cursor.execute('SELECT name, nation_score, gdp, population, balance FROM user_stats WHERE name = ?', (nation_name,))
+            cursor.execute('SELECT name, nation_score, gdp, child, teen, adult, elder, balance FROM user_stats WHERE name = ?', (nation_name,))
             stats_result = cursor.fetchone()
 
             if stats_result:
-                name, nation_score, gdp, population, balance = stats_result
+                name, nation_score, gdp, child, teen, adult, elder, balance = stats_result
+
+                workers = adult//1.2
+                soldiers = adult//6
 
                 embed = discord.Embed(
                     title=f"📊 {name}'s Stats",
@@ -44,7 +47,13 @@ class Stats(commands.Cog):
                 embed.add_field(name='', value='', inline=False)
                 embed.add_field(name='📈 Gross Domestic Product', value=f'{gdp:,}', inline=False)
                 embed.add_field(name='', value='', inline=False)
-                embed.add_field(name='👪 Population', value=f'{population:,}', inline=False)
+                embed.add_field(name='👪 Population', value=f'Displays {name}\'s Population Demographic.', inline=False)
+                embed.add_field(name=f'Children: {child:,}', value='', inline=False)
+                embed.add_field(name=f'Teens: {teen:,}', value='', inline=False)
+                embed.add_field(name=f'Adults: {adult:,}', value='', inline=False)
+                embed.add_field(name=f'Elders: {elder:,}', value='', inline=False)
+                embed.add_field(name=f'Workers: {workers:,}', value='', inline=False)
+                embed.add_field(name=f'Soldiers: {soldiers:,}', value='', inline=False)
                 embed.add_field(name='', value='', inline=False)
                 embed.add_field(name='💰 Balance', value=f'{balance:,}', inline=False)
                 await ctx.send(embed=embed)
@@ -71,12 +80,12 @@ class Stats(commands.Cog):
 
             # fetch user's mil stats
             cursor.execute(
-                'SELECT name_nation, troops, planes, weapon, tanks, artillery, anti_air, barracks FROM user_mil WHERE name_nation = ?',
+                'SELECT name_nation, troops, planes, weapon, tanks, artillery, anti_air, barracks, tank_factory, plane_factory, artillery_factory, anti_air_factory FROM user_mil WHERE name_nation = ?',
                 (nation_name,))
             mil_result = cursor.fetchone()
 
             if mil_result:
-                name_nation, troops, planes, weapon, tanks, artillery, anti_air, barracks = mil_result
+                name_nation, troops, planes, weapon, tanks, artillery, anti_air, barracks, tank_factory, plane_factory, artillery_factory, anti_air_factory = mil_result
 
                 embed = discord.Embed(
                     title=f"⚔ {name_nation}'s Military Stats",
@@ -95,7 +104,7 @@ class Stats(commands.Cog):
                 embed.add_field(name='', value='', inline=False)
                 embed.add_field(name='🎖 Barracks', value=f'{barracks:,}', inline=False)
                 embed.add_field(name='', value='', inline=False)
-                embed.add_field(name='🔫 Weapon', value=f'{weapon}', inline=False)
+                embed.add_field(name='🔫 Weapons', value=f'{weapon}', inline=False)
                 await ctx.send(embed=embed)
             else:
                 embed = discord.Embed(colour=0xEF2F73, title="Error", type='rich',

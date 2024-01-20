@@ -79,6 +79,24 @@ class Help(commands.Cog):
                                                   f'Construct buildings in your nation.')
                 await ctx.send(embed=embed)
 
+            case "allocate":
+                embed = discord.Embed(colour=0xdd7878, title="Help: Allocate", type='rich',
+                                      description=f'Syntax: `$allocate <mil_equip> <amount>`{new_line}{new_line}'
+                                                  f'Allocate military factories to military equipment.')
+                await ctx.send(embed=embed)
+
+            case "deallocate":
+                embed = discord.Embed(colour=0xdd7878, title="Help: Deallocate", type='rich',
+                                      description=f'Syntax: `$deallocate <mil_equip> <amount>`{new_line}{new_line}'
+                                                  f'Deallocate military factories from military equipment.')
+                await ctx.send(embed=embed)
+
+            case "trade":
+                embed = discord.Embed(colour=0xdd7878, title="Help: Trade", type='rich',
+                                      description=f'Syntax: `$trade <target_nation> <material> <amount>`{new_line}{new_line}'
+                                                  f'Trade resources with other nations.')
+                await ctx.send(embed=embed)
+
             case _:   # Actual command list
                 generating = discord.Embed(colour=0xdce0e8, title="Help", type='rich',
                                            description="Generating help pages...")
@@ -95,7 +113,8 @@ class Help(commands.Cog):
 
                 eco_emb = discord.Embed(colour=0xdf8e1d, title="Help | Economy", type='rich')   # Economy Tab
                 eco_emb.add_field(name="Economy", value="Res - Displays your nation's production.\n"
-                                                        "Reserve - Displays your nation's national reserves.",
+                                                        "Reserve - Displays your nation's national reserves.\n"
+                                                        "Trade - Trade resources with other nations.",
                                   inline=False)
 
                 tec_emb = discord.Embed(colour=0x04a5e5, title="Help | Technology", type='rich')   # Technology Tab
@@ -112,6 +131,9 @@ class Help(commands.Cog):
 
                 mil_emb = discord.Embed(colour=0xe64553, title="Help | Military", type='rich')   # Military Tab
                 mil_emb.add_field(name="Ground Forces", value="Recruit - Recruit soldiers into your military.",
+                                  inline=False)
+                mil_emb.add_field(name="War Economy", value="Allocate - Allocate military factories to military equipment.\n"
+                                                            "Deallocate - Deallocate military factories from military equipment.",
                                   inline=False)
 
                 pol_emb = discord.Embed(colour=0x8839ef, title="Help | Politics", type='rich')   # Politics Tab

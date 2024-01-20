@@ -66,8 +66,8 @@ class Create(commands.Cog):
         print(f"Successfully added {user_id}({nat_name})")
 
         # add base stats to the user
-        cursor.execute('INSERT INTO user_stats (name, nation_score, gdp, population, balance) VALUES (?, ?, ?, ?, ?)',
-                       (nat_name, 0, 0, 100000, 1000000))
+        cursor.execute('INSERT INTO user_stats (name, nation_score, gdp, child, teen, adult, elder, balance) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                       (nat_name, 0, 0, 100000, 100000, 450000, 50000, 1000000))
         conn.commit()
 
         # add base mil stats to the user

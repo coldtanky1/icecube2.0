@@ -44,3 +44,10 @@ the ice cube revolution is here, from google spreadsheets to all new discord bot
 - Added "deallocate" command to deallocate military factories for military equipment.
 - Updated the "update" command to update production of military equipment.
 - Added "allocate" and "deallocate" commands to help menu.
+
+# Changelog VER 05
+- Added "game_functions" folder which will contain all the game's functions.
+- Added "PopGrowth" to "game_functions".
+- Added "trade" command.
+- Added "allocate" and "deallocate" commands to help (for real this time).
+- Added "trade" command to help.
