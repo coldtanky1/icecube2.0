@@ -20,7 +20,7 @@ async def load():
 async def main():
     await load()
 <<<<<<< HEAD
-    await bot.start('MTE2ODk2MTc1MDYxMjMyODU0OQ.GZ7iR3.ZiNFKKd6_sw7bHr5uRUGNX_ffUgWP5fiyB3-vs')
+    await bot.start('TOKEN_HERE
 =======
     await bot.start('TOKEN_HERE')
 >>>>>>> origin/main
